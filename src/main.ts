@@ -59,9 +59,48 @@ const amountInput = $<HTMLInputElement>('amount')
 const fmt = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
 const short = (v: number) => `${v / 1000}к`
 
+let shownTotal = 0
+let balanceRaf = 0
+
+// В скрытой вкладке rAF и WAAPI-анимации не тикают — состояние меняем сразу,
+// анимация только украшает видимый экран.
+function animateThen(
+  el: HTMLElement,
+  keyframes: Keyframe[],
+  options: KeyframeAnimationOptions,
+  done: () => void,
+): void {
+  if (document.hidden) {
+    done()
+    return
+  }
+  const anim = el.animate(keyframes, options)
+  anim.onfinish = done
+  anim.oncancel = done
+}
+
+function animateBalance(to: number): void {
+  cancelAnimationFrame(balanceRaf)
+  const from = shownTotal
+  shownTotal = to
+  if (from === to || document.hidden) {
+    balanceEl.textContent = fmt(to)
+    return
+  }
+  const start = performance.now()
+  const dur = 500
+  const tick = (now: number) => {
+    const t = Math.min((now - start) / dur, 1)
+    const eased = 1 - (1 - t) ** 3
+    balanceEl.textContent = fmt(Math.round(from + (to - from) * eased))
+    if (t < 1) balanceRaf = requestAnimationFrame(tick)
+  }
+  balanceRaf = requestAnimationFrame(tick)
+}
+
 function render(): void {
   const total = state.bags.reduce((sum, b) => sum + b.value, 0) + state.wallet
-  balanceEl.textContent = fmt(total)
+  animateBalance(total)
   walletEl.textContent = fmt(state.wallet)
 
   floorEl.innerHTML = ''
@@ -69,7 +108,12 @@ function render(): void {
   if (roomBags.length === 0) {
     floorEl.innerHTML = '<p class="floor__empty">Пусто. Жми «Инкам», когда придут деньги.</p>'
   }
-  for (const bag of roomBags) floorEl.append(createBagEl(bag))
+  let newIdx = 0
+  for (const bag of roomBags) {
+    const el = createBagEl(bag)
+    if (newIds.has(bag.id)) el.style.animationDelay = `${Math.min(newIdx++ * 40, 800)}ms`
+    floorEl.append(el)
+  }
 
   chestChipsEl.innerHTML = ''
   let chestSum = 0
@@ -149,9 +193,31 @@ function makeDraggable(el: HTMLElement, bag: Bag): void {
         if (!cancelled) trySplit(bag, el)
         return
       }
-      placeholder?.remove()
-      if (!cancelled && isOverChest(ev)) chest.add(bag.id)
-      render()
+      el.style.pointerEvents = 'none'
+      if (!cancelled && isOverChest(ev)) {
+        const c = chestEl.getBoundingClientRect()
+        const targetX = c.left + c.width / 2 - rect.left - rect.width / 2
+        const targetY = c.top + c.height / 2 - rect.top - rect.height / 2
+        animateThen(
+          el,
+          [
+            { transform: el.style.transform, opacity: 1 },
+            { transform: `translate(${targetX}px, ${targetY}px) scale(0.25)`, opacity: 0.4 },
+          ],
+          { duration: 200, easing: 'ease-in', fill: 'forwards' },
+          () => {
+            chest.add(bag.id)
+            render()
+          },
+        )
+      } else {
+        animateThen(
+          el,
+          [{ transform: el.style.transform }, { transform: 'translate(0, 0) scale(1)' }],
+          { duration: 260, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)', fill: 'forwards' },
+          () => render(),
+        )
+      }
     }
 
     el.addEventListener('pointermove', onMove)
@@ -168,13 +234,27 @@ function trySplit(bag: Bag, el: HTMLElement): void {
     el.classList.add('bag--shake')
     return
   }
-  const idx = state.bags.findIndex((b) => b.id === bag.id)
-  if (idx === -1) return
-  const children = parts.map((v) => makeBag(v))
-  state.bags.splice(idx, 1, ...children)
-  for (const c of children) newIds.add(c.id)
-  saveState(state)
-  render()
+  el.style.pointerEvents = 'none'
+  animateThen(
+    el,
+    [
+      { transform: 'scale(1)', opacity: 1 },
+      { transform: 'scale(1.4)', opacity: 0 },
+    ],
+    { duration: 160, easing: 'ease-out', fill: 'forwards' },
+    () => {
+      const idx = state.bags.findIndex((b) => b.id === bag.id)
+      if (idx === -1) {
+        render()
+        return
+      }
+      const children = parts.map((v) => makeBag(v))
+      state.bags.splice(idx, 1, ...children)
+      for (const c of children) newIds.add(c.id)
+      saveState(state)
+      render()
+    },
+  )
 }
 
 function income(amount: number): void {
@@ -191,10 +271,23 @@ function income(amount: number): void {
 }
 
 function spend(): void {
-  state.bags = state.bags.filter((b) => !chest.has(b.id))
-  chest.clear()
-  saveState(state)
-  render()
+  const chips = [...chestChipsEl.children] as HTMLElement[]
+  chips.forEach((chip, i) =>
+    chip.animate(
+      [
+        { opacity: 1, transform: 'scale(1)' },
+        { opacity: 0, transform: 'scale(0.4)' },
+      ],
+      { duration: 180, delay: i * 30, easing: 'ease-in', fill: 'forwards' },
+    ),
+  )
+  spendBtn.disabled = true
+  setTimeout(() => {
+    state.bags = state.bags.filter((b) => !chest.has(b.id))
+    chest.clear()
+    saveState(state)
+    render()
+  }, 200 + chips.length * 30)
 }
 
 $('income-btn').addEventListener('click', () => {
@@ -221,3 +314,7 @@ function submitIncome(): void {
 spendBtn.addEventListener('click', spend)
 
 render()
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  void navigator.serviceWorker.register('/sw.js')
+}

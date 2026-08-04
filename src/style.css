@@ -169,9 +169,40 @@ body {
 .wallet {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 13px;
   color: var(--text-muted);
   padding: 0 4px;
+}
+
+.wallet__tidy {
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.wallet__tidy:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.room__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn--undo {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text-muted);
+  font-size: 17px;
+  line-height: 1;
+  padding: 9px 13px;
 }
 
 .chest {

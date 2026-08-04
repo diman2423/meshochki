@@ -1,6 +1,6 @@
 import './style.css'
 import { breakdown, splitValues, makeBag, type Bag } from './money'
-import { loadState, saveState } from './state'
+import { loadState, saveState, type AppState } from './state'
 
 const state = loadState()
 const chest = new Set<string>()
@@ -15,12 +15,15 @@ app.innerHTML = `
         <span class="room__label">Хранилище</span>
         <span class="room__balance" id="balance">0 ₽</span>
       </div>
-      <button class="btn" id="income-btn">+ Инкам</button>
+      <div class="room__actions">
+        <button class="btn btn--undo" id="undo-btn" title="Отменить последнее действие" disabled>↶</button>
+        <button class="btn" id="income-btn">+ Инкам</button>
+      </div>
     </header>
     <section class="floor" id="floor" aria-label="Комната с мешками"></section>
     <div class="wallet">
-      <span>Кошелёк мелочи</span>
-      <span id="wallet">0 ₽</span>
+      <span>Кошелёк мелочи · <span id="wallet">0 ₽</span></span>
+      <button class="wallet__tidy" id="tidy-btn" disabled>Прибраться</button>
     </div>
     <section class="chest" id="chest" aria-label="Сундук трат">
       <div class="chest__top">
@@ -53,11 +56,39 @@ const chestSumEl = $('chest-sum')
 const chestChipsEl = $('chest-chips')
 const chestHintEl = $('chest-hint')
 const spendBtn = $<HTMLButtonElement>('spend-btn')
+const undoBtn = $<HTMLButtonElement>('undo-btn')
+const tidyBtn = $<HTMLButtonElement>('tidy-btn')
 const overlayEl = $('overlay')
 const amountInput = $<HTMLInputElement>('amount')
 
 const fmt = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
 const short = (v: number) => `${v / 1000}к`
+
+const HISTORY_KEY = 'meshochki-history-v1'
+let history: AppState[] = []
+try {
+  const raw = localStorage.getItem(HISTORY_KEY)
+  if (raw) history = JSON.parse(raw) as AppState[]
+} catch {
+  history = []
+}
+
+function snapshot(): void {
+  history.push(JSON.parse(JSON.stringify(state)) as AppState)
+  if (history.length > 30) history.shift()
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+}
+
+function undo(): void {
+  const prev = history.pop()
+  if (!prev) return
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+  state.bags = prev.bags
+  state.wallet = prev.wallet
+  chest.clear()
+  saveState(state)
+  render()
+}
 
 let shownTotal = 0
 let balanceRaf = 0
@@ -132,6 +163,8 @@ function render(): void {
   chestSumEl.textContent = fmt(chestSum)
   chestHintEl.hidden = chestSum > 0
   spendBtn.disabled = chestSum === 0
+  undoBtn.disabled = history.length === 0
+  tidyBtn.disabled = roomBags.length < 2
   newIds.clear()
 }
 
@@ -248,6 +281,7 @@ function trySplit(bag: Bag, el: HTMLElement): void {
         render()
         return
       }
+      snapshot()
       const children = parts.map((v) => makeBag(v))
       state.bags.splice(idx, 1, ...children)
       for (const c of children) newIds.add(c.id)
@@ -258,6 +292,7 @@ function trySplit(bag: Bag, el: HTMLElement): void {
 }
 
 function income(amount: number): void {
+  snapshot()
   const { values, change } = breakdown(amount)
   for (const v of values) {
     const bag = makeBag(v)
@@ -283,11 +318,28 @@ function spend(): void {
   )
   spendBtn.disabled = true
   setTimeout(() => {
+    snapshot()
     state.bags = state.bags.filter((b) => !chest.has(b.id))
     chest.clear()
     saveState(state)
     render()
   }, 200 + chips.length * 30)
+}
+
+function consolidate(): void {
+  const roomBags = state.bags.filter((b) => !chest.has(b.id))
+  const total = roomBags.reduce((sum, b) => sum + b.value, 0)
+  if (total === 0) return
+  const { values } = breakdown(total)
+  const current = roomBags.map((b) => b.value).sort((a, b) => b - a)
+  if (current.length === values.length && current.every((v, i) => v === values[i])) return
+  snapshot()
+  const chestBags = state.bags.filter((b) => chest.has(b.id))
+  const fresh = values.map((v) => makeBag(v))
+  for (const b of fresh) newIds.add(b.id)
+  state.bags = [...chestBags, ...fresh]
+  saveState(state)
+  render()
 }
 
 $('income-btn').addEventListener('click', () => {
@@ -312,6 +364,8 @@ function submitIncome(): void {
 }
 
 spendBtn.addEventListener('click', spend)
+undoBtn.addEventListener('click', undo)
+tidyBtn.addEventListener('click', consolidate)
 
 render()
 

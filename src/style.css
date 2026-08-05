@@ -330,3 +330,82 @@ body {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cat {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cat--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #241c10;
+  font-weight: 600;
+}
+
+.log-link {
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  align-self: center;
+}
+
+.dialog--log {
+  max-height: 80vh;
+}
+
+.log-list {
+  overflow-y: auto;
+  max-height: 55vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.log-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(168, 159, 146, 0.2);
+  font-size: 14px;
+}
+
+.log-item__date {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.log-item__what {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-item__sum {
+  font-weight: 600;
+  flex-shrink: 0;
+}

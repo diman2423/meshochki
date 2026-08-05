@@ -34,6 +34,7 @@ app.innerHTML = `
       <p class="chest__hint" id="chest-hint">Перетащи мешки сюда. Тап по мешку — размен.</p>
       <button class="btn chest__spend" id="spend-btn" disabled>Потратить</button>
     </section>
+    <button class="log-link" id="log-btn">История трат</button>
   </main>
   <div class="overlay" id="overlay" hidden>
     <div class="dialog">
@@ -42,6 +43,26 @@ app.innerHTML = `
       <div class="dialog__actions">
         <button class="btn btn--ghost" id="cancel-btn">Отмена</button>
         <button class="btn" id="ok-btn">Занести</button>
+      </div>
+    </div>
+  </div>
+  <div class="overlay" id="spend-overlay" hidden>
+    <div class="dialog">
+      <p class="dialog__title" id="spend-title">Потратить</p>
+      <div class="cats" id="cats"></div>
+      <input id="note" type="text" placeholder="Заметка (необязательно)" autocomplete="off" />
+      <div class="dialog__actions">
+        <button class="btn btn--ghost" id="spend-cancel">Отмена</button>
+        <button class="btn" id="spend-ok">Потратить</button>
+      </div>
+    </div>
+  </div>
+  <div class="overlay" id="log-overlay" hidden>
+    <div class="dialog dialog--log">
+      <p class="dialog__title">История трат</p>
+      <div class="log-list" id="log-list"></div>
+      <div class="dialog__actions">
+        <button class="btn" id="log-close">Закрыть</button>
       </div>
     </div>
   </div>
@@ -60,6 +81,12 @@ const undoBtn = $<HTMLButtonElement>('undo-btn')
 const tidyBtn = $<HTMLButtonElement>('tidy-btn')
 const overlayEl = $('overlay')
 const amountInput = $<HTMLInputElement>('amount')
+const spendOverlayEl = $('spend-overlay')
+const spendTitleEl = $('spend-title')
+const catsEl = $('cats')
+const noteInput = $<HTMLInputElement>('note')
+const logOverlayEl = $('log-overlay')
+const logListEl = $('log-list')
 
 const fmt = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
 const short = (v: number) => `${v / 1000}к`
@@ -85,6 +112,7 @@ function undo(): void {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
   state.bags = prev.bags
   state.wallet = prev.wallet
+  state.log = prev.log
   chest.clear()
   saveState(state)
   render()
@@ -305,7 +333,70 @@ function income(amount: number): void {
   render()
 }
 
+const CATEGORIES = ['Жильё', 'Еда', 'Транспорт', 'Здоровье', 'Развлечения', 'Одежда', 'Связь', 'Другое']
+let selectedCat: string | null = null
+
+function chestSumNow(): number {
+  return state.bags.filter((b) => chest.has(b.id)).reduce((sum, b) => sum + b.value, 0)
+}
+
+function renderCats(): void {
+  catsEl.innerHTML = ''
+  for (const c of CATEGORIES) {
+    const b = document.createElement('button')
+    b.className = selectedCat === c ? 'cat cat--on' : 'cat'
+    b.textContent = c
+    b.addEventListener('click', () => {
+      selectedCat = selectedCat === c ? null : c
+      renderCats()
+    })
+    catsEl.append(b)
+  }
+}
+
+function openSpendDialog(): void {
+  const sum = chestSumNow()
+  if (sum === 0) return
+  spendTitleEl.textContent = `Потратить ${fmt(sum)}`
+  selectedCat = null
+  noteInput.value = ''
+  renderCats()
+  spendOverlayEl.hidden = false
+}
+
+function openLog(): void {
+  logListEl.innerHTML = ''
+  if (state.log.length === 0) {
+    const p = document.createElement('p')
+    p.className = 'log-empty'
+    p.textContent = 'Пока пусто — трат не было.'
+    logListEl.append(p)
+  }
+  for (const rec of state.log.slice(0, 100)) {
+    const d = new Date(rec.ts)
+    const item = document.createElement('div')
+    item.className = 'log-item'
+    const date = document.createElement('span')
+    date.className = 'log-item__date'
+    date.textContent = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
+    const what = document.createElement('span')
+    what.className = 'log-item__what'
+    what.textContent = rec.note ? `${rec.category} · ${rec.note}` : rec.category
+    const sum = document.createElement('span')
+    sum.className = 'log-item__sum'
+    sum.textContent = fmt(rec.amount)
+    item.append(date, what, sum)
+    logListEl.append(item)
+  }
+  logOverlayEl.hidden = false
+}
+
 function spend(): void {
+  spendOverlayEl.hidden = true
+  const amount = chestSumNow()
+  if (amount === 0) return
+  const category = selectedCat ?? 'Без категории'
+  const note = noteInput.value.trim()
   const chips = [...chestChipsEl.children] as HTMLElement[]
   chips.forEach((chip, i) =>
     chip.animate(
@@ -319,6 +410,7 @@ function spend(): void {
   spendBtn.disabled = true
   setTimeout(() => {
     snapshot()
+    state.log.unshift({ ts: Date.now(), amount, category, note: note || undefined })
     state.bags = state.bags.filter((b) => !chest.has(b.id))
     chest.clear()
     saveState(state)
@@ -363,9 +455,17 @@ function submitIncome(): void {
   }
 }
 
-spendBtn.addEventListener('click', spend)
+spendBtn.addEventListener('click', openSpendDialog)
 undoBtn.addEventListener('click', undo)
 tidyBtn.addEventListener('click', consolidate)
+$('spend-cancel').addEventListener('click', () => {
+  spendOverlayEl.hidden = true
+})
+$('spend-ok').addEventListener('click', spend)
+$('log-btn').addEventListener('click', openLog)
+$('log-close').addEventListener('click', () => {
+  logOverlayEl.hidden = true
+})
 
 render()
 

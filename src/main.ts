@@ -36,7 +36,7 @@ app.innerHTML = `
     </section>
     <div class="links">
       <button class="log-link" id="log-btn">История трат</button>
-      <button class="log-link log-link--danger" id="reset-btn">Сбросить всё</button>
+      <button class="log-link log-link--danger" id="reset-btn">Сбросить…</button>
     </div>
   </main>
   <div class="overlay" id="overlay" hidden>
@@ -62,8 +62,10 @@ app.innerHTML = `
   </div>
   <div class="overlay" id="reset-overlay" hidden>
     <div class="dialog">
-      <p class="dialog__title">Сбросить всё?</p>
-      <p class="dialog__text">Обнулятся мешки, кошелёк мелочи и история трат. Если что, ↶ сможет вернуть.</p>
+      <p class="dialog__title">Что сбросить?</p>
+      <label class="reset-opt"><input type="checkbox" id="reset-bags" checked /> Мешки и кошелёк мелочи</label>
+      <label class="reset-opt"><input type="checkbox" id="reset-log" /> История трат</label>
+      <p class="dialog__text">Если что, ↶ сможет вернуть.</p>
       <div class="dialog__actions">
         <button class="btn btn--ghost" id="reset-cancel">Отмена</button>
         <button class="btn btn--danger" id="reset-ok">Сбросить</button>
@@ -515,19 +517,35 @@ $('log-btn').addEventListener('click', openLog)
 $('log-close').addEventListener('click', () => {
   logOverlayEl.hidden = true
 })
+const resetBagsCb = $<HTMLInputElement>('reset-bags')
+const resetLogCb = $<HTMLInputElement>('reset-log')
+const resetOkBtn = $<HTMLButtonElement>('reset-ok')
+
+function updateResetOk(): void {
+  resetOkBtn.disabled = !resetBagsCb.checked && !resetLogCb.checked
+}
+resetBagsCb.addEventListener('change', updateResetOk)
+resetLogCb.addEventListener('change', updateResetOk)
+
 $('reset-btn').addEventListener('click', () => {
+  resetBagsCb.checked = true
+  resetLogCb.checked = false
+  updateResetOk()
   $('reset-overlay').hidden = false
 })
 $('reset-cancel').addEventListener('click', () => {
   $('reset-overlay').hidden = true
 })
-$('reset-ok').addEventListener('click', () => {
+resetOkBtn.addEventListener('click', () => {
   $('reset-overlay').hidden = true
+  if (!resetBagsCb.checked && !resetLogCb.checked) return
   snapshot()
-  state.bags = []
-  state.wallet = 0
-  state.log = []
-  chest.clear()
+  if (resetBagsCb.checked) {
+    state.bags = []
+    state.wallet = 0
+    chest.clear()
+  }
+  if (resetLogCb.checked) state.log = []
   saveState(state)
   render()
 })

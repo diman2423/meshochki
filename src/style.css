@@ -380,6 +380,20 @@ body {
   color: var(--text-muted);
 }
 
+.reset-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.reset-opt input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .btn--danger {
   background: #c0604d;
   color: #2a130d;

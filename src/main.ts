@@ -205,6 +205,19 @@ function createBagEl(bag: Bag): HTMLElement {
   return el
 }
 
+// «Тяжесть от остатка» (spec_weight_from_balance.md): мешок вязко отстаёт от
+// пальца тем сильнее, чем большую долю оставшихся денег сейчас отдаёшь.
+const WEIGHT = { base: 0.05, k: 1.5, fastFollow: 0.9, slowFollow: 0.12 }
+
+function dragFollow(bagValue: number): number {
+  const remaining = state.bags
+    .filter((b) => !chest.has(b.id))
+    .reduce((sum, b) => sum + b.value, 0)
+  const fraction = remaining > 0 ? Math.min(1, bagValue / remaining) : 1
+  const resistance = WEIGHT.base + (1 - WEIGHT.base) * Math.pow(fraction, WEIGHT.k)
+  return WEIGHT.fastFollow + (WEIGHT.slowFollow - WEIGHT.fastFollow) * resistance
+}
+
 function isOverChest(e: PointerEvent): boolean {
   const r = chestEl.getBoundingClientRect()
   return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
@@ -224,6 +237,23 @@ function makeDraggable(el: HTMLElement, bag: Bag): void {
     const rect = el.getBoundingClientRect()
     let dragging = false
     let placeholder: HTMLElement | null = null
+    let raf = 0
+    let bx = 0
+    let by = 0
+    let tx = 0
+    let ty = 0
+    let follow = 1
+    let last = 0
+
+    const step = (now: number) => {
+      const dt = now - last
+      last = now
+      const f = Math.min(1, (follow * dt) / 16.7)
+      bx += (tx - bx) * f
+      by += (ty - by) * f
+      el.style.transform = `translate(${bx}px, ${by}px) scale(1.1)`
+      raf = requestAnimationFrame(step)
+    }
 
     const onMove = (ev: PointerEvent) => {
       const dx = ev.clientX - startX
@@ -240,15 +270,21 @@ function makeDraggable(el: HTMLElement, bag: Bag): void {
         el.style.left = `${rect.left}px`
         el.style.top = `${rect.top}px`
         el.style.zIndex = '10'
+        el.style.transform = 'translate(0, 0) scale(1.1)'
+        follow = dragFollow(bag.value)
+        last = performance.now()
+        raf = requestAnimationFrame(step)
       }
       if (dragging) {
-        el.style.transform = `translate(${dx}px, ${dy}px) scale(1.1)`
+        tx = dx
+        ty = dy
         chestEl.classList.toggle('chest--over', isOverChest(ev))
       }
     }
 
     const finish = (ev: PointerEvent, cancelled: boolean) => {
       el.removeEventListener('pointermove', onMove)
+      cancelAnimationFrame(raf)
       chestEl.classList.remove('chest--over')
       if (!dragging) {
         if (!cancelled) trySplit(bag, el)

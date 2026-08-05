@@ -1,4 +1,4 @@
-const CACHE = 'meshochki-v1'
+const CACHE = 'meshochki-v2'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -21,18 +21,34 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const { request } = e
   if (request.method !== 'GET' || new URL(request.url).origin !== location.origin) return
-  e.respondWith(
-    caches.match(request).then((cached) => {
-      const fresh = fetch(request)
+
+  // Страницы — сначала сеть (чтобы после деплоя не залипать на старом
+  // index.html, ссылающемся на уже удалённые ассеты), кэш — офлайн-фолбэк.
+  if (request.mode === 'navigate') {
+    e.respondWith(
+      fetch(request)
         .then((res) => {
+          const copy = res.clone()
+          caches.open(CACHE).then((c) => c.put(request, copy))
+          return res
+        })
+        .catch(() => caches.match(request).then((cached) => cached ?? caches.match('./'))),
+    )
+    return
+  }
+
+  // Ассеты с хэшем в имени — кэш-первый, сеть как фолбэк.
+  e.respondWith(
+    caches.match(request).then(
+      (cached) =>
+        cached ??
+        fetch(request).then((res) => {
           if (res.ok) {
             const copy = res.clone()
             caches.open(CACHE).then((c) => c.put(request, copy))
           }
           return res
-        })
-        .catch(() => cached ?? caches.match('./'))
-      return cached ?? fresh
-    }),
+        }),
+    ),
   )
 })

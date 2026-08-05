@@ -355,6 +355,12 @@ body {
   font-weight: 600;
 }
 
+.links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
 .log-link {
   font: inherit;
   font-size: 13px;
@@ -363,7 +369,20 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   padding: 2px;
-  align-self: center;
+}
+
+.log-link--danger {
+  color: #c0604d;
+}
+
+.dialog__text {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.btn--danger {
+  background: #c0604d;
+  color: #2a130d;
 }
 
 .dialog--log {

@@ -34,7 +34,10 @@ app.innerHTML = `
       <p class="chest__hint" id="chest-hint">Перетащи мешки сюда. Тап по мешку — размен.</p>
       <button class="btn chest__spend" id="spend-btn" disabled>Потратить</button>
     </section>
-    <button class="log-link" id="log-btn">История трат</button>
+    <div class="links">
+      <button class="log-link" id="log-btn">История трат</button>
+      <button class="log-link log-link--danger" id="reset-btn">Сбросить всё</button>
+    </div>
   </main>
   <div class="overlay" id="overlay" hidden>
     <div class="dialog">
@@ -54,6 +57,16 @@ app.innerHTML = `
       <div class="dialog__actions">
         <button class="btn btn--ghost" id="spend-cancel">Отмена</button>
         <button class="btn" id="spend-ok">Потратить</button>
+      </div>
+    </div>
+  </div>
+  <div class="overlay" id="reset-overlay" hidden>
+    <div class="dialog">
+      <p class="dialog__title">Сбросить всё?</p>
+      <p class="dialog__text">Обнулятся мешки, кошелёк мелочи и история трат. Если что, ↶ сможет вернуть.</p>
+      <div class="dialog__actions">
+        <button class="btn btn--ghost" id="reset-cancel">Отмена</button>
+        <button class="btn btn--danger" id="reset-ok">Сбросить</button>
       </div>
     </div>
   </div>
@@ -501,6 +514,22 @@ $('spend-ok').addEventListener('click', spend)
 $('log-btn').addEventListener('click', openLog)
 $('log-close').addEventListener('click', () => {
   logOverlayEl.hidden = true
+})
+$('reset-btn').addEventListener('click', () => {
+  $('reset-overlay').hidden = false
+})
+$('reset-cancel').addEventListener('click', () => {
+  $('reset-overlay').hidden = true
+})
+$('reset-ok').addEventListener('click', () => {
+  $('reset-overlay').hidden = true
+  snapshot()
+  state.bags = []
+  state.wallet = 0
+  state.log = []
+  chest.clear()
+  saveState(state)
+  render()
 })
 
 render()
